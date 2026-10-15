@@ -59,6 +59,55 @@ const ok = (s) => console.log(`${C.g}✓${C.x} ${s}`);
 const bad = (s) => { console.error(`${C.r}✗${C.x} ${s}`); process.exitCode = 1; };
 const info = (s) => console.log(`${C.dim}${s}${C.x}`);
 
+/**
+ * 动作后自动回报页面状态 —— 让"看不见"变成不可能。
+ *
+ * 为什么需要它：这个 CLI 常常被**脚本**驱动，而脚本只把 console.log 的结果带给模型。
+ * 如果动作命令只打印"点击成功"，模型就不知道页面变成了什么样 —— 于是会写出
+ * "盲重试 40 次、而页面上明明写着原因却没读" 这种事（真实教训）。
+ *
+ * 所有会改变页面的命令执行完后自动打印一次紧凑快照：
+ * URL / 标题 / 正文首段 / 可交互元素 ref。加 --quiet 可关掉。
+ */
+async function autoSnapshot(label, quiet) {
+  if (quiet) return;
+  try {
+    const st = await op('eval', {
+      code: `return {
+        url: location.href,
+        title: document.title,
+        err: location.href.startsWith('chrome-error'),
+        text: (document.body && document.body.innerText || '').replace(/\\s+/g, ' ').trim(),
+      };`,
+    }, 25_000);
+    const r = st.result ?? {};
+    console.log(`\n${C.dim}┌─ 页面状态${label ? `（${label} 之后）` : ''} ${C.x}`);
+    if (r.err || String(r.url).startsWith('chrome-error')) {
+      console.log(`${C.red ?? C.r}│ 页面加载失败（chrome-error）— 不是页面内容为空，是请求没成功${C.x}`);
+      console.log(`${C.dim}└──────────────────────────────────────────────${C.x}`);
+      return;
+    }
+    console.log(`${C.dim}│${C.x} ${C.b}${String(r.title || '(无标题)').slice(0, 60)}${C.x}`);
+    console.log(`${C.dim}│${C.x} ${C.dim}${r.url}${C.x}`);
+    const body = String(r.text || '').slice(0, 400);
+    if (body) for (const line of body.match(/.{1,92}/g).slice(0, 6)) console.log(`${C.dim}│${C.x} ${line}`);
+    else console.log(`${C.dim}│ (空白页)${C.x}`);
+
+    const ax = await op('ax', { max: 120 }, 30_000).catch(() => null);
+    const inter = (ax?.nodes || []).filter((n) => n.interactive).slice(0, 8);
+    if (inter.length) {
+      console.log(`${C.dim}│${C.x}`);
+      console.log(`${C.dim}│${C.x} ${C.dim}可交互（下一步可直接用这些 ref）:${C.x}`);
+      for (const n of inter) {
+        console.log(`${C.dim}│${C.x}   ${C.c}${String(n.ref).padEnd(5)}${C.x} ${String(n.role).padEnd(9)} ${String(n.name).slice(0, 46)}`);
+      }
+    }
+    console.log(`${C.dim}└──────────────────────────────────────────────${C.x}`);
+  } catch (e) {
+    console.log(`${C.dim}（自动快照失败：${String(e?.message ?? e).slice(0, 80)}）${C.x}`);
+  }
+}
+
 /** 走桥接执行一次渲染层操作。 */
 async function op(o, args = {}, timeoutMs = 90_000) {
   const res = await fetch(`${BRIDGE}/debug/exec`, {
@@ -134,6 +183,7 @@ try {
       if (!url) { bad('用法：open <url>'); break; }
       const r = await op('open', { url }, 90_000);
       ok(`${r.title}\n  ${r.url}`);
+      await autoSnapshot('open', flags.quiet);
       break;
     }
 
@@ -160,6 +210,7 @@ try {
       const args = sel.startsWith('e') || /^[a-z]?\d+$/.test(sel) ? { ref: sel } : { selector: sel };
       const r = await op('click', { ...args, hoverOnly: !!flags.hover, visual: !flags.novisual }, 60_000);
       ok(`点击 ${r.clicked?.tag ?? ''} "${r.clicked?.text ?? ''}"${r.clicked?.href ? '  → ' + r.clicked.href : ''}`);
+      if (!flags.hover) await autoSnapshot('点击', flags.quiet);
       break;
     }
 
@@ -170,6 +221,7 @@ try {
       const args = sel.startsWith('e') ? { ref: sel } : { selector: sel };
       const r = await op('type', { ...args, text, submit: !!flags.submit, clear: !flags.append }, 60_000);
       ok(`输入完成，回读 value=${JSON.stringify(r.value)}${flags.submit ? '（已回车）' : ''}`);
+      if (flags.submit) await autoSnapshot('提交', flags.quiet);
       break;
     }
 
