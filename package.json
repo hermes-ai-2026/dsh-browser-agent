@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "dsh-browser-agent",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Give DeepSeek Harness agents a real browser: drive the built-in sidebar browser with 19 browser_* tools — accessibility-tree reads with stable refs, real CDP input, screenshots, network interception, device emulation, cookie vault, document-start injection, multi-instance, and raw CDP passthrough. 让 DSH 的 agent 真正用上内置浏览器。",
   "type": "module",
   "main": "lib/index.js",
