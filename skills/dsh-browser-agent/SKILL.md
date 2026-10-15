@@ -1,4 +1,4 @@
----
+﻿---
 name: dsh-browser-agent
 description: |
   Drive DeepSeek Harness's own built-in browser as an agent: read a page as a
@@ -12,7 +12,7 @@ description: |
   Not for the user's own Chrome (that is `browser-skill` / bsk) and not for
   HTTP-only fetching.
 metadata:
-  version: "2"
+  version: "3"
   tool_count: 19
   plugin: dsh-browser-agent
 ---

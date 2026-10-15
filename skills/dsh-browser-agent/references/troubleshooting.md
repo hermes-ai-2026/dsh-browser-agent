@@ -214,3 +214,121 @@ DSH 的 webview 跑在 `partition="dsh-sidebar-browser-<uuid>"` 对应的**独�
 **这不是"需要主进程"** —— 是 CDP 的可见性问题。
 
 **替代做法**：需要权限的页面，用 `browser_click` 点掉站点自己的权限弹窗。
+
+---
+
+## 15. ⚠️ `engine` 显示 `renderer-dom` 而不是 `cdp-input` —— 查 `cdpError`
+
+**症状**：点击/输入"看起来成功了"，但返回值里 `engine: "renderer-dom"`（合成事件），
+并带一个 `cdpError` 字段。
+
+**真实案例（v1.0.0，2026-10-16 修复）**：
+
+```json
+{ "engine": "renderer-dom", "cdpError": "bridge is not defined" }
+```
+
+根因：`currentCdpTarget` / `cdpClick` / `cdpType` 是**模块级函数**，而 `bridge` 实例
+在 `apply()` 里用 `const` 声明 —— 作用域够不着，于是每次都抛 `ReferenceError`，
+被 `catch` 吞掉后**静默回退**。功能"看起来正常"，但所有交互都是合成事件，
+**hover 类菜单永远点不动**。
+
+**教训（可推广）**：**动作类工具的返回值必须读 `engine` 和 `cdpError`。**
+"操作成功"不等于"走了预期路径"。这个 bug 是靠读返回值发现的，不是靠猜。
+
+| 字段 | 正确 | 有问题 |
+|---|---|---|
+| `engine` | `cdp-input` | `renderer-dom` |
+| `trusted` | `true` | 无 |
+| `cdpError` | 不存在 | 有值 |
+| `at` | 有坐标 | 无 |
+
+---
+
+## 16. ⚠️ CDP 端口"在监听但连不上" —— 僵尸 socket
+
+**症状**：`browser_status` 报 `cdp.available: false`，但进程命令行**确实带了**
+`--remote-debugging-port=9222`。
+
+**诊断三步**：
+
+```powershell
+Get-NetTCPConnection -LocalPort 9222 -State Listen | Select OwningProcess   # 谁占着
+tasklist /FI "PID eq <PID>"                                                  # 进程还在吗
+curl.exe -sS -o NUL -w "%{http_code}" --max-time 6 http://127.0.0.1:9222/json/version
+```
+
+`netstat` 显示 LISTENING 但 `tasklist` 说进程不存在 → **已死进程泄漏的监听 socket**。
+当前实例绑不上端口时，Chrome 会**静默禁用**远程调试（不报错）。
+
+**原因**：多次重启 DSH 留下孤儿主进程，其中一个死掉时 socket 没释放。
+
+**修法：换端口**（比重启机器快得多）
+
+```powershell
+$sh = New-Object -ComObject WScript.Shell
+$s = $sh.CreateShortcut("$env:USERPROFILE\Desktop\DeepSeek Harness.lnk")
+$s.Arguments = ($s.Arguments -replace '--remote-debugging-port=\d+', '--remote-debugging-port=9444')
+$s.Save()
+[Environment]::SetEnvironmentVariable('DSH_CDP_PORT', '9444', 'User')   # 插件读这个
+```
+
+**关键区分**：`curl` 报 **Connection refused** = 端口没人服务；
+**timeout** = 网络层问题。两者含义完全不同。
+
+---
+
+## 17. ⚠️ 表单里的隐藏蜜罐字段
+
+一些站点（含 DSH 插件目录的提交页）有**反机器人蜜罐**：一个名字诱人、
+定位在屏幕外的输入框：
+
+```
+[e36] textbox "website" @-9999,492 561x47     ← 坐标 -9999 = 屏幕外
+```
+
+**人类看不见它，机器人会填它。填了就判定为垃圾提交。**
+
+**做法**：`browser_read {selector:"form"}` 看完整结构，**只填 label 明确要求的字段**。
+提交前用 `browser_eval` 验证所有字段值 + 确认蜜罐为空。
+
+---
+
+## 18. Cookie 保险库的边界
+
+实测（2026-10-16，必应）：
+
+```
+export → 17 个（含 7 个 httpOnly）
+clear  → JS 可见 cookie 归 0
+import → restored 17/17，failed []
+       → JS 可见恢复 10 个 + 7 个 httpOnly
+```
+
+**只覆盖 cookie，不覆盖 localStorage。** 实测 `clear` 之后 localStorage 的 12 个键**原样还在**。
+需要保住 localStorage 的站点（很多 SPA 把 token 放那儿）要另外用 `browser_eval`：
+
+```js
+// 导出：JSON.stringify(Object.fromEntries(Object.entries(localStorage)))
+// 还原：for (const [k,v] of Object.entries(d)) localStorage.setItem(k, v)
+```
+
+另外：**`clear` 清的是整个 profile 的 cookie**，不是只清当前站点 —— 多站点登录态会一起没。
+
+---
+
+## 19. 请求拦截实测参考（`browser_policy`）
+
+三条规则一次跑通（2026-10-16）：
+
+| 规则 | 实测结果 |
+|---|---|
+| `mock` | `status:200`、`content-type: application/json`、body **正是给定的假 JSON** |
+| `block` | 页面侧 `Failed to fetch` |
+| `redirect` | 请求被透明转发 |
+| 未命中 | **自动放行**，真实页面 210 KB 正常返回 ← 证明不会把页面卡死 |
+
+**`redirect` 的语义要注意**：CDP `Fetch.continueRequest({url})` 是**在服务端改写目标**，
+页面侧 `response.url` **不会变成新地址**，但拿到的是新资源的内容。
+**别拿 `r.url` 判断是否生效，要看 body。**
+
