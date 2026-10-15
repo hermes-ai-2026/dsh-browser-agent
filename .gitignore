@@ -1,0 +1,11 @@
+node_modules/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+# 演示产物
+shot-*.png
+demo-*.png
+cli-test.png
+*.local
+.env

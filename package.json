@@ -1,0 +1,70 @@
+{
+  "name": "dsh-browser-agent",
+  "version": "1.0.0",
+  "description": "Give DeepSeek Harness agents a real browser: drive the built-in sidebar browser with 19 browser_* tools — accessibility-tree reads with stable refs, real CDP input, screenshots, network interception, device emulation, cookie vault, document-start injection, multi-instance, and raw CDP passthrough. 让 DSH 的 agent 真正用上内置浏览器。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cli": "./cli/browser.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-browser": "./cli/browser.mjs"
+  },
+  "files": [
+    "lib",
+    "client",
+    "cli",
+    "skills",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "browser",
+    "browser-automation",
+    "webview",
+    "cdp",
+    "chrome-devtools-protocol",
+    "agent",
+    "electron"
+  ],
+  "license": "MIT",
+  "author": "hermes-ai-2026",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hermes-ai-2026/dsh-browser-agent.git"
+  },
+  "homepage": "https://github.com/hermes-ai-2026/dsh-browser-agent#readme",
+  "bugs": {
+    "url": "https://github.com/hermes-ai-2026/dsh-browser-agent/issues"
+  },
+  "scripts": {
+    "test": "node tests/verify-e2e.mjs && node tests/verify-guard.mjs && node tests/verify-prompt.mjs",
+    "cli": "node cli/browser.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  }
+}

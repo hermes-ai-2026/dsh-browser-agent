@@ -1,0 +1,5 @@
+# dsh-browser-agent bundle patch：把插件插入 profile 的层栈。
+# 宿主半注册 browser_* 工具；客户端半（dsh.client 花名册）在渲染进程驱动 <webview>。
+- insert:
+    - id: browser-agent
+      name: 'dsh-browser-agent'
