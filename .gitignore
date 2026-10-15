@@ -9,3 +9,17 @@ demo-*.png
 cli-test.png
 *.local
 .env
+
+# 本地一次性脚本（不上传）
+step*.mjs
+make-token*.mjs
+sudo-confirm.mjs
+do-upload.mjs
+fix-branch.mjs
+confirm-commit.mjs
+retry-create.mjs
+inspect-new.mjs
+probe-upload-page.mjs
+visual-upload.mjs
+gh-web-upload.mjs
+publish-github.mjs
