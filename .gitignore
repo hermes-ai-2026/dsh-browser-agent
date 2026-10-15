@@ -23,3 +23,6 @@ probe-upload-page.mjs
 visual-upload.mjs
 gh-web-upload.mjs
 publish-github.mjs
+
+# ½ØÍ¼²úÎï
+*.png
